@@ -1,28 +1,34 @@
 package com.dorcaapps.android.ktor
 
 import android.content.Context
-import android.util.Log
-import androidx.exifinterface.media.ExifInterface
+import com.dorcaapps.android.ktor.extensions.putDecryptedContentsIntoOutputStream
+import com.dorcaapps.android.ktor.extensions.receiveMultipartOrNull
+import com.dorcaapps.android.ktor.extensions.writeEncrypted
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.http.content.*
-import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 import io.ktor.serialization.*
 import io.ktor.server.engine.*
 import io.ktor.server.jetty.*
 import io.ktor.util.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import java.time.OffsetDateTime
 
 class KtorServer(private val appContext: Context) {
 
     private val serverEngine by lazy { createServerEngine() }
+
+    private val fileHandler = FileHandler(appContext)
 
     fun start() {
         serverEngine.start(false)
@@ -33,15 +39,15 @@ class KtorServer(private val appContext: Context) {
     }
 
     private fun createServerEngine(): JettyApplicationEngine = embeddedServer(Jetty, port = 8080) {
-        val exif = ExifInterface(File(appContext.cacheDir, "Maik.jpg"))
-        exif
+        installFeatures(this)
+        routing { installRoutes(this) }
+    }
+
+    private fun installFeatures(application: Application): Unit = application.run {
         install(ContentNegotiation) {
             json()
         }
         install(DefaultHeaders)
-        this.plus(CoroutineExceptionHandler { _, throwable ->
-            Log.e("MTest", "booyah", throwable)
-        })
         install(CallLogging) {
             logger = LoggerFactory.getLogger("Application.Test")
             this.format {
@@ -51,59 +57,68 @@ class KtorServer(private val appContext: Context) {
                         it.response.headers.allValues().flattenEntries().joinToString("\n")
             }
         }
-        routing {
-            get("/") {
-                call.respondText(
-                    "Hello World",
-                    ContentType.Text.Plain
-                )
-//                Log.e("MTest", call.toString())
-            }
-            get("/demo") {
-                call.respondText(
-                    "HELLO WORLD!"
-                )
-            }
-            get("/test") {
-                call.respond(HttpStatusCode.OK, TestEntity(35, "theTest"))
-            }
-            post("/post") {
-                val requestBody = call.receive<TestEntity>()
-                call.respond(HttpStatusCode.OK, TestEntity(requestBody.myInt, requestBody.myString))
-            }
-            post("/postfile") {
-                Log.e("MTest", call.request.headers.flattenEntries().joinToString())
-                val multipart = try {
-                    call.receiveMultipart()
-                } catch (e: Exception) {
-                    Log.e("MTest", "caught", e)
-                    throw e
-                }
+    }
 
-                multipart.forEachPart { part ->
-                    when (part) {
-                        is PartData.FormItem -> {
-                            Log.e("MTest", "isFormItem! ${part.value}")
-                        }
-                        is PartData.FileItem -> {
-                            val extension = File(part.originalFileName!!).extension
-                            val file = File(appContext.cacheDir, part.originalFileName!!)
-                            part.streamProvider().use { input ->
-                                file.outputStream().buffered()
-                                    .use { output -> input.copyToSuspend(output) }
-                            }
-                        }
-                    }
-                    part.dispose()
-                }
-                call.respond(TestEntity(1, "ayaya"))
-            }
-            get("/getfile") {
-                call.respondFile(File(appContext.cacheDir, "Maik.jpg"))
-            }
+    private fun installRoutes(routing: Routing): Unit = routing.run {
+        get("/") {
+            call.respondText(
+                "Hello World",
+                ContentType.Text.Plain
+            )
+        }
+        route("/media") {
+            installMediaRoutes(this)
         }
     }
 
+    private fun installMediaRoutes(route: Route): Unit = route.run {
+        put("/") {
+            val multipart = call.receiveMultipartOrNull() ?: run {
+                call.respond(HttpStatusCode.BadRequest)
+                return@put
+            }
+            val parts = multipart.readAllParts()
+            val filePart = parts.filterIsInstance<PartData.FileItem>().singleOrNull() ?: run {
+                parts.forEach { it.dispose() }
+                call.respond(HttpStatusCode.BadRequest)
+                return@put
+            }
+            val contentType = filePart.contentType ?: run {
+                parts.forEach { it.dispose() }
+                call.respond(HttpStatusCode.UnsupportedMediaType)
+                return@put
+            }
+            val creationDate = OffsetDateTime.now()
+            val originalFilename = filePart.originalFileName ?: "filename"
+            val filename = "$creationDate-$originalFilename"
+            val file = File(appContext.filesDir, filename)
+
+            file.writeEncrypted(appContext, filePart.streamProvider())
+            fileHandler.addFileData(
+                filename,
+                originalFilename,
+                creationDate,
+                file.length(),
+                contentType
+            )
+
+            parts.forEach { it.dispose() }
+            call.respond(TestEntity(1, "ayaya"))
+        }
+        get("/{id}") {
+            val id = call.parameters["id"]?.toIntOrNull() ?: run {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+            val (file, contentType) = fileHandler.getFileData(id) ?: run {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+            call.respondOutputStream(contentType = contentType) {
+                file.putDecryptedContentsIntoOutputStream(appContext, this)
+            }
+        }
+    }
 }
 
 suspend fun InputStream.copyToSuspend(
