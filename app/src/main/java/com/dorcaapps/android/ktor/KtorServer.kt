@@ -1,6 +1,7 @@
 package com.dorcaapps.android.ktor
 
 import android.content.Context
+import com.dorcaapps.android.ktor.datapersistence.OrderType
 import com.dorcaapps.android.ktor.extensions.putDecryptedContentsIntoOutputStream
 import com.dorcaapps.android.ktor.extensions.receiveMultipartOrNull
 import com.dorcaapps.android.ktor.extensions.writeEncrypted
@@ -72,25 +73,51 @@ class KtorServer(private val appContext: Context) {
     }
 
     private fun installMediaRoutes(route: Route): Unit = route.run {
-        put("/") {
+        get("/") {
+            val pageSize = call.parameters["pageSize"]?.toIntOrNull()?.takeIf { it >= 1 } ?: 10
+            val page = call.parameters["page"]?.toIntOrNull()?.takeIf { it >= 1 } ?: 1
+            val orderType = OrderType.getWithDefault(call.parameters["order"]) ?: run {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+            val result = fileHandler.getPagedMediaData(
+                page = page,
+                pageSize = pageSize,
+                orderType = orderType
+            )
+            call.respond(result)
+        }
+        delete("/{id}") {
+            val id = call.parameters["id"]?.toIntOrNull() ?: run {
+                call.respond(HttpStatusCode.BadRequest)
+                return@delete
+            }
+            val didDelete = fileHandler.deleteFileDataWith(id)
+            if (didDelete) {
+                call.respond(HttpStatusCode.OK)
+            } else {
+                call.respond(HttpStatusCode.NotFound)
+            }
+        }
+        post("/") {
             val multipart = call.receiveMultipartOrNull() ?: run {
                 call.respond(HttpStatusCode.BadRequest)
-                return@put
+                return@post
             }
             val parts = multipart.readAllParts()
             val filePart = parts.filterIsInstance<PartData.FileItem>().singleOrNull() ?: run {
                 parts.forEach { it.dispose() }
                 call.respond(HttpStatusCode.BadRequest)
-                return@put
+                return@post
             }
             val contentType = filePart.contentType ?: run {
                 parts.forEach { it.dispose() }
                 call.respond(HttpStatusCode.UnsupportedMediaType)
-                return@put
+                return@post
             }
             val creationDate = OffsetDateTime.now()
             val originalFilename = filePart.originalFileName ?: "filename"
-            val filename = "$creationDate-$originalFilename"
+            val filename = "$creationDate#$originalFilename"
             val file = File(appContext.filesDir, filename)
 
             file.writeEncrypted(appContext, filePart.streamProvider())
