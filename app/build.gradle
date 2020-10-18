@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId "com.dorcaapps.android.ktor"
-        minSdkVersion 26
+        minSdkVersion 27
         targetSdkVersion 29
         versionCode 1
         versionName "1.0"
@@ -67,8 +67,7 @@ dependencies {
 
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:1.0.10"
 
-//    implementation "org.slf4j:slf4j-simple:1.7.26"
-//    implementation "ch.qos.logback:logback-classic:1.2.3"
+    // Logging
     implementation "org.slf4j:slf4j-api:1.7.30"
     implementation "com.github.tony19:logback-android:2.0.0"
 

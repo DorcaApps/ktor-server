@@ -15,6 +15,9 @@ interface FileDataDao {
     @Query("SELECT * FROM filedata where id = :id")
     suspend fun getFileDataWithId(id: Int): FileData?
 
+    @Query("SELECT * FROM filedata")
+    suspend fun getAllFileData(): List<FileData>
+
     @Delete
     suspend fun deleteFileData(fileData: FileData): Int
 

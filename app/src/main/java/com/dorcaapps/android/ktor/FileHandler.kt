@@ -16,7 +16,9 @@ class FileHandler(private val applicationContext: Context) {
         val fileData = database.fileDataDao().getFileDataWithId(id) ?: return false
         val didDeleteFile = File(applicationContext.filesDir, fileData.filename)
             .delete()
-        return if (didDeleteFile) {
+        val didDeleteThumbnail = File(applicationContext.filesDir, fileData.thumbnailFilename)
+            .delete()
+        return if (didDeleteFile && didDeleteThumbnail) {
             database.fileDataDao().deleteFileData(fileData) == 1
         } else {
             false
@@ -33,14 +35,16 @@ class FileHandler(private val applicationContext: Context) {
         }
     }
 
-    suspend fun getFileData(id: Int): Pair<File, ContentType>? {
-        val fileData = database.fileDataDao().getFileDataWithId(id) ?: return null
-        return Pair(File(applicationContext.filesDir, fileData.filename), fileData.contentType)
+    suspend fun getFileData(id: Int): FileData? {
+        return database.fileDataDao().getFileDataWithId(id)
     }
+
+    suspend fun getAllFileData(): List<FileData> = database.fileDataDao().getAllFileData()
 
     suspend fun addFileData(
         filename: String,
         originalFilename: String,
+        thumbnailFilename: String,
         creationDate: OffsetDateTime,
         size: Long,
         contentType: ContentType
@@ -48,6 +52,7 @@ class FileHandler(private val applicationContext: Context) {
         val fileData = FileData(
             filename,
             originalFilename,
+            thumbnailFilename,
             creationDate,
             size,
             contentType

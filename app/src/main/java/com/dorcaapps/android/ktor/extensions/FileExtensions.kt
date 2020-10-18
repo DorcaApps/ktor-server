@@ -40,7 +40,10 @@ fun File.readEncrypted(applicationContext: Context): ByteArray {
     return byteArrayOutputStream.toByteArray()
 }
 
-suspend fun File.putDecryptedContentsIntoOutputStream(applicationContext: Context, outputStream: OutputStream) {
+suspend fun File.putDecryptedContentsIntoOutputStream(
+    applicationContext: Context,
+    outputStream: OutputStream
+) {
     val encryptedFile = asEncryptedFile(applicationContext)
     encryptedFile.openFileInput().use { inputStream ->
         inputStream.copyToSuspend(outputStream)

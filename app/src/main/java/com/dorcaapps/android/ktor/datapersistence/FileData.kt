@@ -10,6 +10,7 @@ import java.time.OffsetDateTime
 data class FileData(
     val filename: String,
     val originalFilename: String,
+    val thumbnailFilename: String,
     val lastChanged: OffsetDateTime,
     val size: Long,
     val contentType: ContentType,
