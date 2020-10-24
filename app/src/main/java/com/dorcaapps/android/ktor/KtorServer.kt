@@ -12,6 +12,7 @@ import com.dorcaapps.android.ktor.extensions.putDecryptedContentsIntoOutputStrea
 import com.dorcaapps.android.ktor.extensions.receiveMultipartOrNull
 import com.dorcaapps.android.ktor.extensions.writeEncrypted
 import io.ktor.application.*
+import io.ktor.auth.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.http.content.*
@@ -27,6 +28,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import java.security.MessageDigest
 import java.time.OffsetDateTime
 import java.util.concurrent.TimeUnit
 
@@ -63,6 +65,32 @@ class KtorServer(private val appContext: Context) {
                         it.response.headers.allValues().flattenEntries().joinToString("\n")
             }
         }
+        install(Authentication) {
+            basic(name = Constants.Authentication.BASIC) {
+                validate { credentials ->
+                    Log.e("MTest", "${credentials.name} ${credentials.password}")
+                    if (credentials.name == "name" && credentials.password == "pass")
+                        UserIdPrincipal("uuuh")
+                    else null
+                }
+            }
+            digest(name = Constants.Authentication.DIGEST) {
+                val password = "Circle Of Life"
+                val digester = MessageDigest.getInstance("MD5")
+                realm = "testrealm@host.com"
+
+                digestProvider { userName, realm ->
+                    when (userName) {
+                        "missing" -> null
+                        else -> {
+                            digester.reset()
+                            digester.update("$userName:$realm:$password".toByteArray())
+                            digester.digest()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private fun installRoutes(routing: Routing): Unit = routing.run {
@@ -72,12 +100,14 @@ class KtorServer(private val appContext: Context) {
                 ContentType.Text.Plain
             )
         }
-        route("/media") {
-            route("/{id}") {
-                route("/thumbnail") { installMediaIdThumbnailRoutes(this) }
-                installMediaIdRoutes(this)
+        authenticate(Constants.Authentication.DIGEST) {
+            route("/media") {
+                route("/{id}") {
+                    route("/thumbnail") { installMediaIdThumbnailRoutes(this) }
+                    installMediaIdRoutes(this)
+                }
+                installMediaRoutes(this)
             }
-            installMediaRoutes(this)
         }
     }
 
@@ -222,7 +252,7 @@ class KtorServer(private val appContext: Context) {
             }
         }
         val thumbnail =
-                decodeSampledBitmapFromFile(encryptedImageFile, 100, 100)
+            decodeSampledBitmapFromFile(encryptedImageFile, 100, 100)
         val stream = ByteArrayOutputStream()
         thumbnail.compress(Bitmap.CompressFormat.PNG, 100, stream)
         thumbnailFile.writeEncrypted(appContext, stream.toByteArray())
@@ -266,6 +296,7 @@ class KtorServer(private val appContext: Context) {
             }
 
         }
+
     fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
         // Raw height and width of image
         val (height: Int, width: Int) = options.run { outHeight to outWidth }
