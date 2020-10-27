@@ -1,4 +1,4 @@
-package com.dorcaapps.android.ktor
+package com.dorcaapps.android.ktor.handler
 
 import android.content.Context
 import com.dorcaapps.android.ktor.datapersistence.AppDatabase

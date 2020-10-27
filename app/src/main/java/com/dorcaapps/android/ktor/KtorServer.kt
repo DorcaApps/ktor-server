@@ -7,10 +7,13 @@ import android.media.MediaMetadataRetriever
 import android.util.Log
 import androidx.security.crypto.EncryptedFile
 import com.dorcaapps.android.ktor.datapersistence.OrderType
+import com.dorcaapps.android.ktor.dto.SessionCookie
 import com.dorcaapps.android.ktor.extensions.asEncryptedFile
 import com.dorcaapps.android.ktor.extensions.putDecryptedContentsIntoOutputStream
 import com.dorcaapps.android.ktor.extensions.receiveMultipartOrNull
 import com.dorcaapps.android.ktor.extensions.writeEncrypted
+import com.dorcaapps.android.ktor.handler.AuthenticationHandler
+import com.dorcaapps.android.ktor.handler.FileHandler
 import io.ktor.application.*
 import io.ktor.auth.*
 import io.ktor.features.*
@@ -21,6 +24,7 @@ import io.ktor.routing.*
 import io.ktor.serialization.*
 import io.ktor.server.engine.*
 import io.ktor.server.jetty.*
+import io.ktor.sessions.*
 import io.ktor.util.*
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
@@ -28,7 +32,6 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
-import java.security.MessageDigest
 import java.time.OffsetDateTime
 import java.util.concurrent.TimeUnit
 
@@ -37,6 +40,7 @@ class KtorServer(private val appContext: Context) {
     private val serverEngine by lazy { createServerEngine() }
 
     private val fileHandler = FileHandler(appContext)
+    private val authenticationHandler = AuthenticationHandler()
 
     fun start() {
         serverEngine.start(false)
@@ -65,32 +69,11 @@ class KtorServer(private val appContext: Context) {
                         it.response.headers.allValues().flattenEntries().joinToString("\n")
             }
         }
-        install(Authentication) {
-            basic(name = Constants.Authentication.BASIC) {
-                validate { credentials ->
-                    Log.e("MTest", "${credentials.name} ${credentials.password}")
-                    if (credentials.name == "name" && credentials.password == "pass")
-                        UserIdPrincipal("uuuh")
-                    else null
-                }
-            }
-            digest(name = Constants.Authentication.DIGEST) {
-                val password = "Circle Of Life"
-                val digester = MessageDigest.getInstance("MD5")
-                realm = "testrealm@host.com"
-
-                digestProvider { userName, realm ->
-                    when (userName) {
-                        "missing" -> null
-                        else -> {
-                            digester.reset()
-                            digester.update("$userName:$realm:$password".toByteArray())
-                            digester.digest()
-                        }
-                    }
-                }
-            }
+        install(Sessions) {
+            Log.e("MTest", "sessions")
+            cookie<SessionCookie>("Session-Cookie")
         }
+        install(Authentication, authenticationHandler.authenticationConfig)
     }
 
     private fun installRoutes(routing: Routing): Unit = routing.run {
@@ -101,6 +84,13 @@ class KtorServer(private val appContext: Context) {
             )
         }
         authenticate(Constants.Authentication.DIGEST) {
+            get("/login") {
+                call.sessions.set(authenticationHandler.getNewSessionCookie())
+                call.respond(HttpStatusCode.OK)
+            }
+        }
+
+        authenticate(Constants.Authentication.SESSION) {
             route("/media") {
                 route("/{id}") {
                     route("/thumbnail") { installMediaIdThumbnailRoutes(this) }
