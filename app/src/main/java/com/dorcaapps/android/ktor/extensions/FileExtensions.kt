@@ -3,7 +3,6 @@ package com.dorcaapps.android.ktor.extensions
 import android.content.Context
 import androidx.security.crypto.EncryptedFile
 import androidx.security.crypto.MasterKey
-import com.dorcaapps.android.ktor.copyToSuspend
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
