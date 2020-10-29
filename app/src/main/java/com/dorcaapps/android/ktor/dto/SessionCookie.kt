@@ -9,6 +9,8 @@ import java.util.*
 @Serializable
 data class SessionCookie(val id: String): Principal {
     companion object {
+        const val name = "Session-Cookie"
+
         fun create() = SessionCookie(
             String.format(
                 "%032x",

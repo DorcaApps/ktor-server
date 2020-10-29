@@ -45,24 +45,23 @@ class KtorServer(private val appContext: Context) {
     }
 
     private fun installFeatures(application: Application): Unit = application.run {
+        install(DefaultHeaders)
+        install(Authentication, authenticationHandler.authenticationConfig)
         install(ContentNegotiation) {
             json()
         }
-        install(DefaultHeaders)
+        install(Sessions) {
+            cookie<SessionCookie>(SessionCookie.name)
+        }
         install(CallLogging) {
             logger = LoggerFactory.getLogger("Application.Test")
-            this.format {
-                "\nRequest:\n" +
-                        it.request.headers.flattenEntries().joinToString("\n") +
-                        "\nResponse:\n" +
-                        it.response.headers.allValues().flattenEntries().joinToString("\n")
+            format {
+                "\nRequest: ${it.request.toLogString()}\n    " +
+                        it.request.headers.flattenEntries().joinToString("\n    ") +
+                        "\nResponse: ${it.response.status()}\n    " +
+                        it.response.headers.allValues().flattenEntries().joinToString("\n    ")
             }
         }
-        install(Sessions) {
-            Log.e("MTest", "sessions")
-            cookie<SessionCookie>("Session-Cookie")
-        }
-        install(Authentication, authenticationHandler.authenticationConfig)
     }
 
     private fun installRoutes(routing: Routing): Unit = routing.run {
