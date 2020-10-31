@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import com.dorcaapps.android.ktor.datapersistence.AppDatabase
 import com.dorcaapps.android.ktor.datapersistence.FileData
+import com.dorcaapps.android.ktor.datapersistence.LoginData
 import com.dorcaapps.android.ktor.datapersistence.OrderType
 import com.dorcaapps.android.ktor.dto.MediaData
 import com.dorcaapps.android.ktor.extensions.asEncryptedFile
@@ -31,6 +32,11 @@ class FileHandler @Inject constructor(
 
     suspend fun hasAccount(username: String) =
         database.loginDataDao().getLoginData(username) != null
+
+    suspend fun saveLoginData(loginData: LoginData) =
+        database.loginDataDao().insertLoginData(loginData) > 0
+
+    suspend fun getLoginData(username: String) = database.loginDataDao().getLoginData(username)
 
     suspend fun deleteFileDataWith(id: Int): Boolean {
         val fileData = database.fileDataDao().getFileDataWithId(id) ?: return false

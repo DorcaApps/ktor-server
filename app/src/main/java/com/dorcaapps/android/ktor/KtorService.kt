@@ -5,9 +5,11 @@ import android.content.Intent
 import android.os.IBinder
 import android.util.Log
 import com.dorcaapps.android.ktor.Constants.Notification.NOTIFICATION_ID_SERVICE
+import com.dorcaapps.android.ktor.Constants.Notification.SERVICE_ACTION_DATA_PAYLOAD
 import com.dorcaapps.android.ktor.Constants.Notification.SERVICE_ACTION_KEY
 import com.dorcaapps.android.ktor.Constants.Notification.SERVICE_ACTION_REGISTER
 import com.dorcaapps.android.ktor.Constants.Notification.SERVICE_ACTION_STOP
+import com.dorcaapps.android.ktor.datapersistence.LoginData
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -53,9 +55,10 @@ class KtorService : Service() {
     }
 
     private fun registerUser(intent: Intent) {
-        val notificationId =
-            intent.getIntExtra(SERVICE_ACTION_KEY, -1).takeUnless { it == -1 } ?: return
-        Log.e("MTest", intent.toString())
+        val notificationId = intent.getIntExtra(SERVICE_ACTION_KEY, -1)
         notificationHelper.cancelNotification(notificationId)
+        val loginData = intent.getSerializableExtra(SERVICE_ACTION_DATA_PAYLOAD) as? LoginData
+            ?: return
+        server.confirmRegistration(loginData)
     }
 }

@@ -2,6 +2,7 @@ package com.dorcaapps.android.ktor
 
 import android.content.Context
 import android.util.Log
+import com.dorcaapps.android.ktor.datapersistence.LoginData
 import com.dorcaapps.android.ktor.datapersistence.OrderType
 import com.dorcaapps.android.ktor.dto.LoginDataDTO
 import com.dorcaapps.android.ktor.dto.SessionCookie
@@ -23,6 +24,7 @@ import io.ktor.serialization.*
 import io.ktor.server.engine.*
 import io.ktor.sessions.*
 import io.ktor.util.*
+import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.time.OffsetDateTime
@@ -31,12 +33,19 @@ import javax.inject.Singleton
 
 @Singleton
 class KtorServer @Inject constructor(
-    @ApplicationContext private val appContext: Context,
+    @ApplicationContext
+    private val appContext: Context,
     private val notificationHelper: NotificationHelper,
     private val fileHandler: FileHandler,
     private val authenticationHandler: AuthenticationHandler,
     private val serverEngine: ApplicationEngine
 ) {
+    private val coroutineExceptionHandler =
+        CoroutineExceptionHandler { _, throwable ->
+            Log.e("MTest", "Exception in CoroutineExceptionHandler", throwable)
+        }
+    private val coroutineScope =
+        CoroutineScope(Dispatchers.IO + SupervisorJob() + coroutineExceptionHandler)
 
     fun start() {
         serverEngine.start(false)
@@ -45,6 +54,13 @@ class KtorServer @Inject constructor(
 
     fun stop(gracePeriodMillis: Long, timeOutMillis: Long) {
         serverEngine.stop(gracePeriodMillis, timeOutMillis)
+        coroutineScope.cancel()
+    }
+
+    fun confirmRegistration(loginData: LoginData) {
+        coroutineScope.launch(Dispatchers.IO) {
+            fileHandler.saveLoginData(loginData)
+        }
     }
 
     private fun setupApplicationEngine() {
@@ -84,10 +100,14 @@ class KtorServer @Inject constructor(
 
         post("/register") {
             val loginData =
-                call.receiveOrNull<LoginDataDTO>()?.toDomainModel("login") ?: run {
+                call.receiveOrNull<LoginDataDTO>()?.toDomainModel() ?: run {
                     call.respond(HttpStatusCode.BadRequest)
                     return@post
                 }
+            if (fileHandler.hasAccount(loginData.username)) {
+                call.respond(HttpStatusCode.Conflict)
+                return@post
+            }
             notificationHelper.showRegisterNotification(loginData)
             call.respond(HttpStatusCode.OK)
         }

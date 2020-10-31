@@ -7,5 +7,5 @@ import java.io.Serializable
 @Entity
 data class LoginData(
     @PrimaryKey val username: String,
-    val passwordHash: String
+    val password: String
 ): Serializable

@@ -8,9 +8,9 @@ import androidx.room.Query
 interface LoginDataDao {
 
     @Insert
-    fun insertLoginData(loginData: LoginData): Long
+    suspend fun insertLoginData(loginData: LoginData): Long
 
     @Query("SELECT * FROM logindata WHERE username = :username")
-    fun getLoginData(username: String): LoginData?
+    suspend fun getLoginData(username: String): LoginData?
 
 }

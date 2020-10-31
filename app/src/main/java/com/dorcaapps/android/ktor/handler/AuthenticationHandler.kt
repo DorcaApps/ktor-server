@@ -2,12 +2,13 @@ package com.dorcaapps.android.ktor.handler
 
 import com.dorcaapps.android.ktor.Constants
 import com.dorcaapps.android.ktor.dto.SessionCookie
+import com.dorcaapps.android.ktor.extensions.toMD5ByteArray
 import io.ktor.application.*
 import io.ktor.auth.*
 import io.ktor.http.*
 import io.ktor.response.*
 import io.ktor.sessions.*
-import java.security.MessageDigest
+import io.ktor.util.*
 import java.time.OffsetDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,17 +27,17 @@ class AuthenticationHandler @Inject constructor(fileHandler: FileHandler) {
             }
         }
         digest(name = Constants.Authentication.LOGIN) {
-            val password = "Circle Of Life"
-            val digester = MessageDigest.getInstance("MD5")
             realm = "login"
 
+            @OptIn(KtorExperimentalAPI::class)
             digestProvider { userName, realm ->
                 when (userName) {
                     "missing" -> null
                     else -> {
-                        digester.reset()
-                        digester.update("$userName:$realm:$password".toByteArray())
-                        digester.digest()
+                        val savedLoginData =
+                            fileHandler.getLoginData(userName) ?: return@digestProvider null
+
+                        "$userName:$realm:${savedLoginData.password}".toMD5ByteArray()
                     }
                 }
             }
