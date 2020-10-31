@@ -21,7 +21,6 @@ import io.ktor.response.*
 import io.ktor.routing.*
 import io.ktor.serialization.*
 import io.ktor.server.engine.*
-import io.ktor.server.jetty.*
 import io.ktor.sessions.*
 import io.ktor.util.*
 import org.slf4j.LoggerFactory
@@ -35,22 +34,24 @@ class KtorServer @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val notificationHelper: NotificationHelper,
     private val fileHandler: FileHandler,
-    private val authenticationHandler: AuthenticationHandler
+    private val authenticationHandler: AuthenticationHandler,
+    private val serverEngine: ApplicationEngine
 ) {
-
-    private val serverEngine by lazy { createServerEngine() }
 
     fun start() {
         serverEngine.start(false)
+        setupApplicationEngine()
     }
 
     fun stop(gracePeriodMillis: Long, timeOutMillis: Long) {
         serverEngine.stop(gracePeriodMillis, timeOutMillis)
     }
 
-    private fun createServerEngine(): JettyApplicationEngine = embeddedServer(Jetty, port = 8080) {
-        installFeatures(this)
-        routing { installRoutes(this) }
+    private fun setupApplicationEngine() {
+        serverEngine.application.apply {
+            installFeatures(this)
+            routing { installRoutes(this) }
+        }
     }
 
     private fun installFeatures(application: Application): Unit = application.run {

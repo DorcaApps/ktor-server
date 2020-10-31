@@ -24,8 +24,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class FileHandler @Inject constructor(@ApplicationContext private val context: Context) {
-    private val database by lazy { AppDatabase.get(context) }
+class FileHandler @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val database: AppDatabase
+) {
 
     suspend fun hasAccount(username: String) =
         database.loginDataDao().getLoginData(username) != null
