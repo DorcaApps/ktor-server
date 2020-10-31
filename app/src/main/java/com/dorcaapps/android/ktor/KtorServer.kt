@@ -3,16 +3,20 @@ package com.dorcaapps.android.ktor
 import android.content.Context
 import android.util.Log
 import com.dorcaapps.android.ktor.datapersistence.OrderType
+import com.dorcaapps.android.ktor.dto.LoginDataDTO
 import com.dorcaapps.android.ktor.dto.SessionCookie
 import com.dorcaapps.android.ktor.extensions.putDecryptedContentsIntoOutputStream
 import com.dorcaapps.android.ktor.extensions.receiveMultipartOrNull
 import com.dorcaapps.android.ktor.handler.AuthenticationHandler
 import com.dorcaapps.android.ktor.handler.FileHandler
+import com.dorcaapps.android.ktor.mapper.toDomainModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.application.*
 import io.ktor.auth.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.http.content.*
+import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 import io.ktor.serialization.*
@@ -23,13 +27,18 @@ import io.ktor.util.*
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.time.OffsetDateTime
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class KtorServer(private val appContext: Context) {
+@Singleton
+class KtorServer @Inject constructor(
+    @ApplicationContext private val appContext: Context,
+    private val notificationHelper: NotificationHelper,
+    private val fileHandler: FileHandler,
+    private val authenticationHandler: AuthenticationHandler
+) {
 
     private val serverEngine by lazy { createServerEngine() }
-
-    private val fileHandler = FileHandler(appContext)
-    private val authenticationHandler = AuthenticationHandler()
 
     fun start() {
         serverEngine.start(false)
@@ -71,7 +80,18 @@ class KtorServer(private val appContext: Context) {
                 ContentType.Text.Plain
             )
         }
-        authenticate(Constants.Authentication.DIGEST) {
+
+        post("/register") {
+            val loginData =
+                call.receiveOrNull<LoginDataDTO>()?.toDomainModel("login") ?: run {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@post
+                }
+            notificationHelper.showRegisterNotification(loginData)
+            call.respond(HttpStatusCode.OK)
+        }
+
+        authenticate(Constants.Authentication.LOGIN) {
             get("/login") {
                 call.sessions.set(authenticationHandler.getNewSessionCookie())
                 call.respond(HttpStatusCode.OK)

@@ -9,8 +9,11 @@ import io.ktor.response.*
 import io.ktor.sessions.*
 import java.security.MessageDigest
 import java.time.OffsetDateTime
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class AuthenticationHandler {
+@Singleton
+class AuthenticationHandler @Inject constructor(fileHandler: FileHandler) {
     private val sessionCookieMap = mutableMapOf<String, OffsetDateTime>()
 
     val authenticationConfig: Authentication.Configuration.() -> Unit = {
@@ -22,10 +25,10 @@ class AuthenticationHandler {
                 call.respond(HttpStatusCode.Unauthorized)
             }
         }
-        digest(name = Constants.Authentication.DIGEST) {
+        digest(name = Constants.Authentication.LOGIN) {
             val password = "Circle Of Life"
             val digester = MessageDigest.getInstance("MD5")
-            realm = "testrealm@host.com"
+            realm = "login"
 
             digestProvider { userName, realm ->
                 when (userName) {

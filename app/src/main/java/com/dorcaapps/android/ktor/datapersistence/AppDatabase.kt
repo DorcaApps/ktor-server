@@ -12,10 +12,11 @@ import com.dorcaapps.android.ktor.extensions.getPassphrase
 import net.sqlcipher.database.SQLiteDatabase
 import net.sqlcipher.database.SupportFactory
 
-@Database(entities = [FileData::class], version = 1)
+@Database(entities = [FileData::class, LoginData::class], version = 1)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun fileDataDao(): FileDataDao
+    abstract fun loginDataDao(): LoginDataDao
 
     companion object {
         fun get(applicationContext: Context): AppDatabase {

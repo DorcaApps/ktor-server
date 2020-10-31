@@ -11,6 +11,7 @@ import com.dorcaapps.android.ktor.extensions.asEncryptedFile
 import com.dorcaapps.android.ktor.extensions.copyToSuspend
 import com.dorcaapps.android.ktor.extensions.decodeSampledBitmap
 import com.dorcaapps.android.ktor.extensions.writeEncrypted
+import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.http.*
 import io.ktor.http.content.*
 import kotlinx.coroutines.coroutineScope
@@ -19,15 +20,21 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.time.OffsetDateTime
 import java.util.concurrent.TimeUnit
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class FileHandler(private val applicationContext: Context) {
-    private val database by lazy { AppDatabase.get(applicationContext) }
+@Singleton
+class FileHandler @Inject constructor(@ApplicationContext private val context: Context) {
+    private val database by lazy { AppDatabase.get(context) }
+
+    suspend fun hasAccount(username: String) =
+        database.loginDataDao().getLoginData(username) != null
 
     suspend fun deleteFileDataWith(id: Int): Boolean {
         val fileData = database.fileDataDao().getFileDataWithId(id) ?: return false
-        val didDeleteFile = File(applicationContext.filesDir, fileData.filename)
+        val didDeleteFile = File(context.filesDir, fileData.filename)
             .delete()
-        val didDeleteThumbnail = File(applicationContext.filesDir, fileData.thumbnailFilename)
+        val didDeleteThumbnail = File(context.filesDir, fileData.thumbnailFilename)
             .delete()
         return if (didDeleteFile && didDeleteThumbnail) {
             database.fileDataDao().deleteFileData(fileData) == 1
@@ -40,9 +47,11 @@ class FileHandler(private val applicationContext: Context) {
         val offset = (page - 1) * pageSize
         return when (orderType) {
             OrderType.MOST_RECENT_LAST ->
-                database.fileDataDao().getPagedMediaDataRecentLast(limit = pageSize, offset = offset)
+                database.fileDataDao()
+                    .getPagedMediaDataRecentLast(limit = pageSize, offset = offset)
             OrderType.MOST_RECENT_FIRST ->
-                database.fileDataDao().getPagedMediaDataRecentFirst(limit = pageSize, offset = offset)
+                database.fileDataDao()
+                    .getPagedMediaDataRecentFirst(limit = pageSize, offset = offset)
         }
     }
 
@@ -76,7 +85,7 @@ class FileHandler(private val applicationContext: Context) {
         imageFile: File,
         thumbnailFile: File
     ) {
-        val encryptedImageFile = imageFile.asEncryptedFile(applicationContext)
+        val encryptedImageFile = imageFile.asEncryptedFile(context)
         encryptedImageFile.openFileOutput().use { outputStream ->
             filePart.streamProvider().use { inputStream ->
                 inputStream.copyToSuspend(outputStream)
@@ -85,7 +94,7 @@ class FileHandler(private val applicationContext: Context) {
         val thumbnail = encryptedImageFile.decodeSampledBitmap(100, 100)
         val stream = ByteArrayOutputStream()
         thumbnail.compress(Bitmap.CompressFormat.PNG, 100, stream)
-        thumbnailFile.writeEncrypted(applicationContext, stream.toByteArray())
+        thumbnailFile.writeEncrypted(context, stream.toByteArray())
     }
 
     suspend fun saveVideoAndItsThumbnail(
@@ -117,12 +126,12 @@ class FileHandler(private val applicationContext: Context) {
                 tempFile.delete()
 
                 thumbnailFile.writeEncrypted(
-                    applicationContext,
+                    context,
                     stream.toByteArray()
                 )
             }
             launch {
-                videoFile.writeEncrypted(applicationContext, bytes)
+                videoFile.writeEncrypted(context, bytes)
             }
 
         }
