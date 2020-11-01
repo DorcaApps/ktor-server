@@ -3,6 +3,7 @@ package com.dorcaapps.android.ktor.handler
 import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.os.Build
 import com.dorcaapps.android.ktor.datapersistence.AppDatabase
 import com.dorcaapps.android.ktor.datapersistence.FileData
 import com.dorcaapps.android.ktor.datapersistence.LoginData
@@ -120,23 +121,31 @@ class FileHandler @Inject constructor(
                     }
                     outputStream.write(bytes)
                 }
-                val mediaRetriever =
-                    MediaMetadataRetriever().apply { setDataSource(tempFile.path) }
-                val thumbnailBitmap = mediaRetriever.getScaledFrameAtTime(
-                    TimeUnit.SECONDS.toMicros(1),
-                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                    100,
-                    100
-                )
+                val mediaRetriever = MediaMetadataRetriever().apply { setDataSource(tempFile.path) }
+                val thumbnailBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    mediaRetriever.getScaledFrameAtTime(
+                        TimeUnit.SECONDS.toMicros(1),
+                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                        100,
+                        100
+                    )
+                } else {
+                    val bitmapOriginalSize =
+                        mediaRetriever.getFrameAtTime(
+                            TimeUnit.SECONDS.toMicros(1),
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                        )
+                    Bitmap.createScaledBitmap(bitmapOriginalSize, 100, 100, true)
+                }
+                mediaRetriever.release()
+
                 val stream = ByteArrayOutputStream()
                 thumbnailBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
-                mediaRetriever.close()
-                tempFile.delete()
-
                 thumbnailFile.writeEncrypted(
                     context,
                     stream.toByteArray()
                 )
+                tempFile.delete()
             }
             launch {
                 videoFile.writeEncrypted(context, bytes)
