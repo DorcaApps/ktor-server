@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.dorcaapps.android.ktor.Constants.Notification.CHANNEL_ID_REGISTER
 import com.dorcaapps.android.ktor.Constants.Notification.CHANNEL_ID_SERVICE
@@ -89,6 +90,7 @@ class NotificationHelper @Inject constructor(@ApplicationContext private val con
     private fun createNotificationChannel(channelId: String, name: String) {
         // Notification channels are only available in OREO and higher.
         // So, add a check on SDK version.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         // Create the NotificationChannel with all the parameters.
         val notificationChannel = NotificationChannel(
             channelId,

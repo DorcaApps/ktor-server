@@ -13,12 +13,14 @@ android {
 
     defaultConfig {
         applicationId "com.dorcaapps.android.ktor"
-        minSdkVersion 27
+        minSdkVersion 25
         targetSdkVersion 29
         versionCode 1
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        multiDexEnabled true
     }
 
     kotlinOptions {
@@ -63,8 +65,8 @@ dependencies {
     androidTestImplementation "androidx.test.espresso:espresso-core:3.3.0"
 
     implementation "io.ktor:ktor-server-core:$ktor_version"
-    implementation "io.ktor:ktor-server-jetty:$ktor_version"
-//    implementation "io.ktor:ktor-server-netty:$ktor_version"
+//    implementation "io.ktor:ktor-server-jetty:$ktor_version"
+    implementation "io.ktor:ktor-server-netty:$ktor_version"
 //    implementation "io.ktor:ktor-gson:$ktor_version"
     implementation "io.ktor:ktor-serialization:$ktor_version"
     implementation "io.ktor:ktor-auth:$ktor_version"
