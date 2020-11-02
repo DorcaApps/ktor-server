@@ -9,10 +9,7 @@ import com.dorcaapps.android.ktor.datapersistence.FileData
 import com.dorcaapps.android.ktor.datapersistence.LoginData
 import com.dorcaapps.android.ktor.datapersistence.OrderType
 import com.dorcaapps.android.ktor.dto.MediaData
-import com.dorcaapps.android.ktor.extensions.asEncryptedFile
-import com.dorcaapps.android.ktor.extensions.copyToSuspend
-import com.dorcaapps.android.ktor.extensions.decodeSampledBitmap
-import com.dorcaapps.android.ktor.extensions.writeEncrypted
+import com.dorcaapps.android.ktor.extensions.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.http.*
 import io.ktor.http.content.*
@@ -130,12 +127,10 @@ class FileHandler @Inject constructor(
                         100
                     )
                 } else {
-                    val bitmapOriginalSize =
-                        mediaRetriever.getFrameAtTime(
-                            TimeUnit.SECONDS.toMicros(1),
-                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-                        )
-                    Bitmap.createScaledBitmap(bitmapOriginalSize, 100, 100, true)
+                    mediaRetriever.getFrameAtTime(
+                        TimeUnit.SECONDS.toMicros(1),
+                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                    ).getScaledBitmapWithOriginalAspectRatio()
                 }
                 mediaRetriever.release()
 
