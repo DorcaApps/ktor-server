@@ -6,6 +6,7 @@ import com.dorcaapps.android.ktor.datapersistence.LoginData
 import com.dorcaapps.android.ktor.datapersistence.OrderType
 import com.dorcaapps.android.ktor.dto.LoginDataDTO
 import com.dorcaapps.android.ktor.dto.SessionCookie
+import com.dorcaapps.android.ktor.extensions.asEncryptedFile
 import com.dorcaapps.android.ktor.extensions.putDecryptedContentsIntoOutputStream
 import com.dorcaapps.android.ktor.extensions.receiveMultipartOrNull
 import com.dorcaapps.android.ktor.handler.AuthenticationHandler
@@ -14,6 +15,7 @@ import com.dorcaapps.android.ktor.mapper.toDomainModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.application.*
 import io.ktor.auth.*
+import io.ktor.client.request.forms.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.http.content.*
@@ -24,6 +26,9 @@ import io.ktor.serialization.*
 import io.ktor.server.engine.*
 import io.ktor.sessions.*
 import io.ktor.util.*
+import io.ktor.utils.io.core.*
+import io.ktor.utils.io.core.internal.*
+import io.ktor.utils.io.streams.*
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -136,11 +141,11 @@ class KtorServer @Inject constructor(
                 call.respond(HttpStatusCode.BadRequest)
                 return@get
             }
-            val allFileData = fileHandler.getAllFileData()
-            Log.e("MTest", allFileData.count().toString())
-            allFileData.forEach {
-                Log.e("MTest", it.toString())
-            }
+//            val allFileData = fileHandler.getAllFileData()
+//            Log.e("MTest", allFileData.count().toString())
+//            allFileData.forEach {
+//                Log.e("MTest", it.toString())
+//            }
             val fileData = fileHandler.getFileData(id) ?: run {
                 call.respond(HttpStatusCode.NotFound)
                 return@get
@@ -196,14 +201,16 @@ class KtorServer @Inject constructor(
                     fileData.originalFilename
                 ).toString()
             )
-            call.respondOutputStream(contentType = fileData.contentType) {
-                file.putDecryptedContentsIntoOutputStream(appContext, this)
+            call.respondBytes(contentType = fileData.contentType) {
+                file.asEncryptedFile(appContext).openFileInput().use {
+                    it.readBytes()
+                }
             }
         }
     }
 
     private fun installMediaRoutes(route: Route): Unit = route.run {
-        get("/") {
+        get {
             val pageSize = call.parameters["pageSize"]?.toIntOrNull()?.takeIf { it >= 1 } ?: 10
             val page = call.parameters["page"]?.toIntOrNull()?.takeIf { it >= 1 } ?: 1
             val orderType = OrderType.getWithDefault(call.parameters["order"]) ?: run {
@@ -218,7 +225,7 @@ class KtorServer @Inject constructor(
             call.respond(result)
         }
 
-        post("/") {
+        post {
             val multipart = call.receiveMultipartOrNull() ?: run {
                 call.respond(HttpStatusCode.BadRequest)
                 return@post
