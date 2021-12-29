@@ -8,7 +8,6 @@ import com.dorcaapps.android.ktor.dto.LoginDataDTO
 import com.dorcaapps.android.ktor.dto.SessionCookie
 import com.dorcaapps.android.ktor.extensions.asEncryptedFile
 import com.dorcaapps.android.ktor.extensions.putDecryptedContentsIntoOutputStream
-import com.dorcaapps.android.ktor.extensions.receiveMultipartOrNull
 import com.dorcaapps.android.ktor.handler.AuthenticationHandler
 import com.dorcaapps.android.ktor.handler.FileHandler
 import com.dorcaapps.android.ktor.mapper.toDomainModel
@@ -226,33 +225,29 @@ class KtorServer @Inject constructor(
         }
 
         post {
-            val multipart = call.receiveMultipartOrNull() ?: run {
+            val originalMediaFilename = call.request.header(HttpHeaders.ContentDisposition)?.run {
+                ContentDisposition.parse(this).parameter(ContentDisposition.Parameters.FileName)
+            } ?: run {
                 call.respond(HttpStatusCode.BadRequest)
                 return@post
             }
-            val parts = multipart.readAllParts()
-            val filePart = parts.filterIsInstance<PartData.FileItem>().singleOrNull() ?: run {
-                parts.forEach { it.dispose() }
-                call.respond(HttpStatusCode.BadRequest)
-                return@post
-            }
+            val contentType = call.request.contentType()
             val creationDate = OffsetDateTime.now()
-            val originalMediaFilename = filePart.originalFileName ?: "filename"
             val mediaFilename = "$creationDate#$originalMediaFilename"
             val thumbnailFilename = "$mediaFilename#thumbnail.png"
             val mediaFile = File(appContext.filesDir, mediaFilename)
             val thumbnailFile = File(appContext.filesDir, thumbnailFilename)
 
-            val contentType = filePart.contentType
-            when (contentType?.contentType) {
+            when (contentType.contentType) {
                 ContentType.Image.Any.contentType -> {
-                    fileHandler.saveImageAndItsThumbnail(filePart, mediaFile, thumbnailFile)
+                    val bytes = call.receive<ByteArray>()
+                    fileHandler.saveImageAndItsThumbnail(bytes, mediaFile, thumbnailFile)
                 }
                 ContentType.Video.Any.contentType -> {
-                    fileHandler.saveVideoAndItsThumbnail(filePart, mediaFile, thumbnailFile)
+                    val bytes = call.receive<ByteArray>()
+                    fileHandler.saveVideoAndItsThumbnail(bytes, mediaFile, thumbnailFile)
                 }
                 else -> {
-                    parts.forEach { it.dispose() }
                     call.respond(HttpStatusCode.UnsupportedMediaType)
                     return@post
                 }
@@ -265,7 +260,6 @@ class KtorServer @Inject constructor(
                 mediaFile.length(),
                 contentType
             )
-            parts.forEach { it.dispose() }
             call.respond(HttpStatusCode.OK)
         }
     }
