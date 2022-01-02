@@ -1,5 +1,6 @@
 package com.dorcaapps.android.ktor.datapersistence
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -12,7 +13,10 @@ data class FileData(
     val originalFilename: String,
     val thumbnailFilename: String,
     val lastChanged: OffsetDateTime,
-    val size: Long,
+    @ColumnInfo(name = "size")
+    val encryptedSize: Long,
+    @ColumnInfo(defaultValue = "0")
+    val decryptedSize: Long,
     val contentType: ContentType,
     @PrimaryKey(autoGenerate = true) val id: Int? = null
 )

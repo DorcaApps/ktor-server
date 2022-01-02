@@ -25,8 +25,10 @@ import io.ktor.serialization.*
 import io.ktor.server.engine.*
 import io.ktor.sessions.*
 import io.ktor.util.*
+import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
 import io.ktor.utils.io.core.internal.*
+import io.ktor.utils.io.jvm.javaio.*
 import io.ktor.utils.io.streams.*
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
@@ -140,11 +142,6 @@ class KtorServer @Inject constructor(
                 call.respond(HttpStatusCode.BadRequest)
                 return@get
             }
-//            val allFileData = fileHandler.getAllFileData()
-//            Log.e("MTest", allFileData.count().toString())
-//            allFileData.forEach {
-//                Log.e("MTest", it.toString())
-//            }
             val fileData = fileHandler.getFileData(id) ?: run {
                 call.respond(HttpStatusCode.NotFound)
                 return@get
@@ -200,11 +197,17 @@ class KtorServer @Inject constructor(
                     fileData.originalFilename
                 ).toString()
             )
-            call.respondBytes(contentType = fileData.contentType) {
-                file.asEncryptedFile(appContext).openFileInput().use {
-                    it.readBytes()
-                }
-            }
+            call.respond(
+                OutputStreamContentWithLength(
+                    body = {
+                        file.asEncryptedFile(appContext).openFileInput().use {
+                            it.copyTo(this)
+                        }
+                    },
+                    contentType = fileData.contentType,
+                    contentLength = fileData.decryptedSize
+                )
+            )
         }
     }
 
@@ -232,20 +235,27 @@ class KtorServer @Inject constructor(
                 return@post
             }
             val contentType = call.request.contentType()
+            val contentLength = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()
+                ?: run {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@post
+                }
             val creationDate = OffsetDateTime.now()
             val mediaFilename = "$creationDate#$originalMediaFilename"
             val thumbnailFilename = "$mediaFilename#thumbnail.png"
             val mediaFile = File(appContext.filesDir, mediaFilename)
             val thumbnailFile = File(appContext.filesDir, thumbnailFilename)
-
             when (contentType.contentType) {
                 ContentType.Image.Any.contentType -> {
                     val bytes = call.receive<ByteArray>()
                     fileHandler.saveImageAndItsThumbnail(bytes, mediaFile, thumbnailFile)
                 }
                 ContentType.Video.Any.contentType -> {
-                    val bytes = call.receive<ByteArray>()
-                    fileHandler.saveVideoAndItsThumbnail(bytes, mediaFile, thumbnailFile)
+                    fileHandler.saveVideoAndItsThumbnail(
+                        call.receiveChannel(),
+                        mediaFile,
+                        thumbnailFile
+                    )
                 }
                 else -> {
                     call.respond(HttpStatusCode.UnsupportedMediaType)
@@ -253,12 +263,13 @@ class KtorServer @Inject constructor(
                 }
             }
             fileHandler.addFileData(
-                mediaFilename,
-                originalMediaFilename,
-                thumbnailFilename,
-                creationDate,
-                mediaFile.length(),
-                contentType
+                filename = mediaFilename,
+                originalFilename = originalMediaFilename,
+                thumbnailFilename = thumbnailFilename,
+                creationDate = creationDate,
+                encryptedSize = mediaFile.length(),
+                decryptedSize = contentLength,
+                contentType = contentType
             )
             call.respond(HttpStatusCode.OK)
         }

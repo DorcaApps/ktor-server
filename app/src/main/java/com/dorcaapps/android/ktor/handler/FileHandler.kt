@@ -15,6 +15,8 @@ import com.dorcaapps.android.ktor.extensions.getScaledBitmapWithOriginalAspectRa
 import com.dorcaapps.android.ktor.extensions.writeEncrypted
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.http.*
+import io.ktor.utils.io.*
+import io.ktor.utils.io.jvm.javaio.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
@@ -74,16 +76,18 @@ class FileHandler @Inject constructor(
         originalFilename: String,
         thumbnailFilename: String,
         creationDate: OffsetDateTime,
-        size: Long,
+        encryptedSize: Long,
+        decryptedSize: Long,
         contentType: ContentType
     ) {
         val fileData = FileData(
-            filename,
-            originalFilename,
-            thumbnailFilename,
-            creationDate,
-            size,
-            contentType
+            filename = filename,
+            originalFilename = originalFilename,
+            thumbnailFilename = thumbnailFilename,
+            lastChanged = creationDate,
+            encryptedSize = encryptedSize,
+            decryptedSize = decryptedSize,
+            contentType = contentType
         )
         database.fileDataDao().insertFileData(fileData)
     }
@@ -98,20 +102,31 @@ class FileHandler @Inject constructor(
             outputStream.write(byteArray)
         }
         val thumbnail = encryptedImageFile.decodeSampledBitmap(100, 100)
+
         val stream = ByteArrayOutputStream()
         thumbnail.compress(Bitmap.CompressFormat.PNG, 100, stream)
         thumbnailFile.writeEncrypted(context, stream.toByteArray())
     }
 
     suspend fun saveVideoAndItsThumbnail(
-        bytes: ByteArray,
+        byteReadChannel: ByteReadChannel,
         videoFile: File,
         thumbnailFile: File
     ): Unit =
         coroutineScope {
+            // TODO: Improve on this
             val tempFile = File.createTempFile("prefix", "suffix")
             launch {
-                tempFile.writeBytes(bytes)
+                val encryptedFile = videoFile.asEncryptedFile(context)
+                encryptedFile.openFileOutput().use {
+                    byteReadChannel.copyTo(it)
+                }
+
+                tempFile.outputStream().use { output ->
+                    encryptedFile.openFileInput().use { input ->
+                        input.copyTo(output)
+                    }
+                }
                 val mediaRetriever = MediaMetadataRetriever().apply { setDataSource(tempFile.path) }
                 val thumbnailBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                     mediaRetriever.getScaledFrameAtTime(
@@ -119,12 +134,12 @@ class FileHandler @Inject constructor(
                         MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                         100,
                         100
-                    )
+                    )!!
                 } else {
                     mediaRetriever.getFrameAtTime(
                         TimeUnit.SECONDS.toMicros(1),
                         MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-                    ).getScaledBitmapWithOriginalAspectRatio()
+                    )!!.getScaledBitmapWithOriginalAspectRatio()
                 }
                 mediaRetriever.release()
 
@@ -136,9 +151,6 @@ class FileHandler @Inject constructor(
                 )
             }.invokeOnCompletion {
                 tempFile.delete()
-            }
-            launch {
-                videoFile.writeEncrypted(context, bytes)
             }
 
         }
