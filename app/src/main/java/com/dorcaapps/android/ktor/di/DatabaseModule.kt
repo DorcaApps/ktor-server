@@ -69,6 +69,7 @@ class AutoMigration1To2(private val context: Context) : AutoMigrationSpec {
             val mediaFile = File(context.filesDir, filename)
             mediaFile.asEncryptedFile(context).openFileInput().use { input ->
                 var decryptedSize: Long = 0
+                // TODO: Write test and check if input.skip(Long.MAX_VALUE) returns valid value
                 input.buffered().use {
                     val iterator = it.iterator()
                     while (iterator.hasNext()) {

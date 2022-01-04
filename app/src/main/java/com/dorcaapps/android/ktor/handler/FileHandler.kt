@@ -9,16 +9,11 @@ import com.dorcaapps.android.ktor.datapersistence.FileData
 import com.dorcaapps.android.ktor.datapersistence.LoginData
 import com.dorcaapps.android.ktor.datapersistence.OrderType
 import com.dorcaapps.android.ktor.dto.MediaData
-import com.dorcaapps.android.ktor.extensions.asEncryptedFile
-import com.dorcaapps.android.ktor.extensions.decodeSampledBitmap
-import com.dorcaapps.android.ktor.extensions.getScaledBitmapWithOriginalAspectRatio
-import com.dorcaapps.android.ktor.extensions.writeEncrypted
+import com.dorcaapps.android.ktor.extensions.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.http.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.jvm.javaio.*
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.time.OffsetDateTime
@@ -112,46 +107,29 @@ class FileHandler @Inject constructor(
         byteReadChannel: ByteReadChannel,
         videoFile: File,
         thumbnailFile: File
-    ): Unit =
-        coroutineScope {
-            // TODO: Improve on this
-            val tempFile = File.createTempFile("prefix", "suffix")
-            launch {
-                val encryptedFile = videoFile.asEncryptedFile(context)
-                encryptedFile.openFileOutput().use {
-                    byteReadChannel.copyTo(it)
-                }
-
-                tempFile.outputStream().use { output ->
-                    encryptedFile.openFileInput().use { input ->
-                        input.copyTo(output)
-                    }
-                }
-                val mediaRetriever = MediaMetadataRetriever().apply { setDataSource(tempFile.path) }
-                val thumbnailBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                    mediaRetriever.getScaledFrameAtTime(
-                        TimeUnit.SECONDS.toMicros(1),
-                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        100,
-                        100
-                    )!!
-                } else {
-                    mediaRetriever.getFrameAtTime(
-                        TimeUnit.SECONDS.toMicros(1),
-                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-                    )!!.getScaledBitmapWithOriginalAspectRatio()
-                }
-                mediaRetriever.release()
-
-                val stream = ByteArrayOutputStream()
-                thumbnailBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
-                thumbnailFile.writeEncrypted(
-                    context,
-                    stream.toByteArray()
-                )
-            }.invokeOnCompletion {
-                tempFile.delete()
-            }
-
+    ) {
+        val encryptedFile = videoFile.asEncryptedFile(context)
+        encryptedFile.openFileOutput().use {
+            byteReadChannel.copyTo(it)
         }
+
+        val dataSource = EncryptedFileDataSource(encryptedFile)
+        val mediaRetriever = MediaMetadataRetriever().apply { setDataSource(dataSource) }
+        val thumbnailBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            mediaRetriever.getScaledFrameAtTime(
+                TimeUnit.SECONDS.toMicros(1),
+                MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                100,
+                100
+            )!!
+        } else {
+            mediaRetriever.getFrameAtTime(
+                TimeUnit.SECONDS.toMicros(1),
+                MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            )!!.getScaledBitmapWithOriginalAspectRatio()
+        }
+        mediaRetriever.release()
+
+        thumbnailBitmap.compressIntoEncryptedFile(thumbnailFile, context)
+    }
 }
