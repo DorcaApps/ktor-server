@@ -1,7 +1,6 @@
 package com.dorcaapps.android.ktor
 
 import android.content.Context
-import android.util.Log
 import com.dorcaapps.android.ktor.datapersistence.LoginData
 import com.dorcaapps.android.ktor.datapersistence.OrderType
 import com.dorcaapps.android.ktor.dto.LoginDataDTO
@@ -10,6 +9,7 @@ import com.dorcaapps.android.ktor.extensions.asEncryptedFile
 import com.dorcaapps.android.ktor.extensions.putDecryptedContentsIntoOutputStream
 import com.dorcaapps.android.ktor.handler.AuthenticationHandler
 import com.dorcaapps.android.ktor.handler.FileHandler
+import com.dorcaapps.android.ktor.handler.bugtracker.Bugtracker
 import com.dorcaapps.android.ktor.mapper.toDomainModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.application.*
@@ -33,6 +33,7 @@ import io.ktor.utils.io.streams.*
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import java.io.File
+import java.io.FileNotFoundException
 import java.time.OffsetDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -44,11 +45,12 @@ class KtorServer @Inject constructor(
     private val notificationHelper: NotificationHelper,
     private val fileHandler: FileHandler,
     private val authenticationHandler: AuthenticationHandler,
-    private val serverEngine: ApplicationEngine
+    private val serverEngine: ApplicationEngine,
+    private val bugtracker: Bugtracker
 ) {
     private val coroutineExceptionHandler =
         CoroutineExceptionHandler { _, throwable ->
-            Log.e("MTest", "Exception in CoroutineExceptionHandler", throwable)
+            bugtracker.trackThrowable(throwable)
         }
     private val coroutineScope =
         CoroutineScope(Dispatchers.IO + SupervisorJob() + coroutineExceptionHandler)
@@ -92,6 +94,12 @@ class KtorServer @Inject constructor(
                         it.request.headers.flattenEntries().joinToString("\n    ") +
                         "\nResponse: ${it.response.status()}\n    " +
                         it.response.headers.allValues().flattenEntries().joinToString("\n    ")
+            }
+        }
+        install(StatusPages) {
+            exception<Exception> {
+                bugtracker.trackThrowable(it)
+                throw it
             }
         }
     }
@@ -153,10 +161,8 @@ class KtorServer @Inject constructor(
                     File(appContext.filesDir, fileData.thumbnailFilename).takeIf { it.exists() }
                 }
                 else -> null
-            } ?: run {
-                call.respond(HttpStatusCode.InternalServerError)
-                return@get
-            }
+            } ?: throw FileNotFoundException("ID: $id, FileName: ${fileData.thumbnailFilename}")
+
             call.respondOutputStream(contentType = ContentType.Image.PNG) {
                 thumbnailFile.putDecryptedContentsIntoOutputStream(appContext, this)
             }
@@ -186,10 +192,7 @@ class KtorServer @Inject constructor(
                 return@get
             }
             val file = File(appContext.filesDir, fileData.filename).takeIf { it.exists() }
-                ?: run {
-                    call.respond(HttpStatusCode.InternalServerError)
-                    return@get
-                }
+                ?: throw FileNotFoundException("ID: $id, FileName: ${fileData.filename}")
             call.response.header(
                 HttpHeaders.ContentDisposition,
                 ContentDisposition.Attachment.withParameter(
