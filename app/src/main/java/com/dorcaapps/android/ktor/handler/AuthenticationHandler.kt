@@ -45,7 +45,7 @@ class AuthenticationHandler @Inject constructor(fileHandler: FileHandler) {
     }
 
     fun getNewSessionCookie(): SessionCookie = SessionCookie.create().apply {
-        sessionCookieMap[id] = OffsetDateTime.now().plusMinutes(1)
+        sessionCookieMap[id] = OffsetDateTime.now().plusMinutes(10)
     }
 
     private fun handleCookie(session: CurrentSession, sessionCookie: SessionCookie): Principal? =

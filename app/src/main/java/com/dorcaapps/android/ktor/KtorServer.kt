@@ -14,10 +14,8 @@ import com.dorcaapps.android.ktor.mapper.toDomainModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.application.*
 import io.ktor.auth.*
-import io.ktor.client.request.forms.*
 import io.ktor.features.*
 import io.ktor.http.*
-import io.ktor.http.content.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
@@ -25,11 +23,8 @@ import io.ktor.serialization.*
 import io.ktor.server.engine.*
 import io.ktor.sessions.*
 import io.ktor.util.*
-import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
-import io.ktor.utils.io.core.internal.*
 import io.ktor.utils.io.jvm.javaio.*
-import io.ktor.utils.io.streams.*
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -80,6 +75,8 @@ class KtorServer @Inject constructor(
 
     private fun installFeatures(application: Application): Unit = application.run {
         install(DefaultHeaders)
+        install(AutoHeadResponse)
+        install(PartialContent)
         install(Authentication, authenticationHandler.authenticationConfig)
         install(ContentNegotiation) {
             json()
@@ -169,6 +166,7 @@ class KtorServer @Inject constructor(
         }
     }
 
+    @OptIn(ExperimentalIoApi::class)
     private fun installMediaIdRoutes(route: Route): Unit = route.run {
         delete {
             val id = call.parameters["id"]?.toIntOrNull() ?: run {
@@ -200,13 +198,10 @@ class KtorServer @Inject constructor(
                     fileData.originalFilename
                 ).toString()
             )
+
             call.respond(
-                OutputStreamContentWithLength(
-                    body = {
-                        file.asEncryptedFile(appContext).openFileInput().use {
-                            it.copyTo(this)
-                        }
-                    },
+                ByteReadChannelContentWithLength(
+                    body = file.asEncryptedFile(appContext).openFileInput().toByteReadChannel(),
                     contentType = fileData.contentType,
                     contentLength = fileData.decryptedSize
                 )

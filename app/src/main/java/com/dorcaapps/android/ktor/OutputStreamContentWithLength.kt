@@ -7,7 +7,13 @@ import io.ktor.utils.io.core.*
 import io.ktor.utils.io.jvm.javaio.*
 import java.io.OutputStream
 
-// Ktor does not yet support responding with an OutputStream with content length header
+/**
+ * Ktor does not yet support responding with a ByteReadChannel or OutputStream with content length header.
+ * Also, in order for the PartialContent plugin to work,
+ * any kind of OutgoingContent.ReadChannelContent is required.
+ * Thus this class does not work with PartialContent
+ * @see <a href="https://ktor.io/docs/partial-content.html#detailed-description">Ktor docs</a>
+ * */
 class OutputStreamContentWithLength(
     private val body: suspend OutputStream.() -> Unit,
     override val contentType: ContentType,
@@ -19,3 +25,4 @@ class OutputStreamContentWithLength(
         channel.toOutputStream().use { it.body() }
     }
 }
+
